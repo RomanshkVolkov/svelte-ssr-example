@@ -1,0 +1,59 @@
+services:
+  STACK_PLACEHOLDER-app:
+    image: IMAGE_PLACEHOLDER
+    environment:
+    networks:
+      - traefik_proxy
+      - internal
+    deploy:
+      replicas: 1
+      labels:
+        # Habilitar Traefik para este servicio
+        - "traefik.enable=true"
+
+        # Definir el router HTTP (puerto 80) - redirige a HTTPS
+        - "traefik.http.routers.STACK_PLACEHOLDER-app-http.rule=Host(`HOST_PLACEHOLDER`)"
+        - "traefik.http.routers.STACK_PLACEHOLDER-app-http.entrypoints=web"
+        - "traefik.http.routers.STACK_PLACEHOLDER-app-http.middlewares=redirect-to-https"
+
+        # Definir el router HTTPS (puerto 443)
+        - "traefik.http.routers.STACK_PLACEHOLDER-app-https.rule=Host(`HOST_PLACEHOLDER`)"
+        - "traefik.http.routers.STACK_PLACEHOLDER-app-https.entrypoints=websecure"
+        - "traefik.http.routers.STACK_PLACEHOLDER-app-https.tls=true"
+        - "traefik.http.routers.STACK_PLACEHOLDER-app-https.tls.certresolver=myresolver"
+
+        # Middleware para redirección HTTPS
+        - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
+        - "traefik.http.middlewares.redirect-to-https.redirectscheme.permanent=true"
+
+        # Definir el servicio y puerto del contenedor
+        - "traefik.http.services.STACK_PLACEHOLDER-app.loadbalancer.server.port=3000"
+
+        # Especificar la red de Traefik (importante en Swarm mode)
+        - "traefik.swarm.network=traefik_proxy"
+
+  STACK_PLACEHOLDER-api:
+    image: IMAGE_API_PLACEHOLDER
+    environment:
+    networks:
+      - internal
+      - database
+    deploy:
+      replicas: 1
+      # Si tu API necesita ser expuesta externamente también:
+      # labels:
+      #   - "traefik.enable=true"
+      #   - "traefik.http.routers.STACK_PLACEHOLDER-api-https.rule=Host(`api.HOST_PLACEHOLDER`)"
+      #   - "traefik.http.routers.STACK_PLACEHOLDER-api-https.entrypoints=websecure"
+      #   - "traefik.http.routers.STACK_PLACEHOLDER-api-https.tls=true"
+      #   - "traefik.http.routers.STACK_PLACEHOLDER-api-https.tls.certresolver=myresolver"
+      #   - "traefik.http.services.STACK_PLACEHOLDER-api.loadbalancer.server.port=PUERTO_API"
+      #   - "traefik.docker.network=traefik_proxy"
+
+networks:
+  traefik_proxy:
+    external: true
+  internal:
+    driver: overlay
+  database:
+    external: true

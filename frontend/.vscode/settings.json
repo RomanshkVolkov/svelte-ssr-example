@@ -1,0 +1,17 @@
+{
+   "[svelte]": {
+     "editor.defaultFormatter": "svelte.svelte-vscode"
+   },
+   "[typescript]": {
+    "editor.defaultFormatter": "denoland.vscode-deno"
+   },
+   "biome.enabled": false,
+   "files.exclude": {
+    "**/.git": true,
+    "**/.svn": true,
+    "**/.hg": true,
+    "**/.DS_Store": true,
+    "**/Thumbs.db": true,
+    "**/generated": true
+   }
+}

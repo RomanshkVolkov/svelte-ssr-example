@@ -1,0 +1,111 @@
+name: Deploy to development
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - dev
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      ENVIRONMENT: dev
+      REGISTRY: "ghcr.io"
+      IMAGE: "${{ github.repository_owner }}/${{ github.event.repository.name}}"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build image frontend
+        run: |
+          SHORT_SHA=$(git rev-parse --short=7 HEAD)
+          IMAGE_REPO="${{ env.REGISTRY }}/$(echo "${{ env.IMAGE }}" | tr '[:upper:]' '[:lower:]'):${SHORT_SHA}"
+          docker build -t "${IMAGE_REPO}" ./frontend
+
+      - name: Build image backend
+        run: |
+          SHORT_SHA=$(git rev-parse --short=7 HEAD)
+          IMAGE_REPO="${{ env.REGISTRY }}/$(echo "${{ env.IMAGE }}-api" | tr '[:upper:]' '[:lower:]'):${SHORT_SHA}"
+          docker build -t "${IMAGE_REPO}" ./backend
+
+      - name: Push image frontend
+        run: |
+          SHORT_SHA=$(git rev-parse --short=7 HEAD)
+          IMAGE_REPO="${{ env.REGISTRY }}/$(echo "${{ env.IMAGE }}" | tr '[:upper:]' '[:lower:]'):${SHORT_SHA}"
+          docker push "$IMAGE_REPO"
+
+      - name: Push image backend
+        run: |
+          SHORT_SHA=$(git rev-parse --short=7 HEAD)
+          IMAGE_REPO="${{ env.REGISTRY }}/$(echo "${{ env.IMAGE }}-api" | tr '[:upper:]' '[:lower:]'):${SHORT_SHA}"
+          docker push "$IMAGE_REPO"
+
+      - name: Build template deployment
+        env:
+          DEPLOY_app_PUBLIC_API_URL: "http://${{ github.event.repository.name }}-${{ env.ENVIRONMENT }}_${{ github.event.repository.name }}-${{ env.ENVIRONMENT }}-api:8080/api/v1"
+          DEPLOY_api_DB_POSTGRE_STRING_CONECTION: "${{ secrets.DB_POSTGRE_STRING_CONECTION }}"
+        run: |
+          SHORT_SHA=$(git rev-parse --short=7 HEAD)
+          .deploy/build_deployment.sh \
+          -s "${{ github.event.repository.name }}" \
+          -e "${{ env.ENVIRONMENT }}" \
+          -i "${{ env.REGISTRY }}/$(echo "${{ env.IMAGE }}" | tr '[:upper:]' '[:lower:]'):${SHORT_SHA}" \
+          -a "${{ env.REGISTRY }}/$(echo "${{ env.IMAGE }}-api" | tr '[:upper:]' '[:lower:]'):${SHORT_SHA}" \
+          -h "${{ vars.HOST_DNS }}" \
+          -t "${{ vars.TLS}}" \
+          -o "/tmp/${{ github.event.repository.name }}.${{ env.ENVIRONMENT }}.deployment.yml"
+
+      - name: Set up SSH key
+        uses: webfactory/ssh-agent@v0.5.3
+        with:
+          ssh-private-key: ${{ secrets.HOST_SSH_PRIVATE_KEY }}
+
+      - name: Copy deployment file to server
+        run: |
+          FILE_PATH="/tmp/${{ github.event.repository.name }}.${{ env.ENVIRONMENT }}.deployment.yml"
+          scp -o StrictHostKeyChecking=no -P ${{ secrets.HOST_SSH_PORT}} "$FILE_PATH" ${{ secrets.HOST_SSH_USERNAME }}@${{ secrets.HOST_SSH_NAME }}:"$FILE_PATH"
+
+      - name: Docker login on server
+        run: ssh -o StrictHostKeyChecking=no -p ${{ secrets.HOST_SSH_PORT }} ${{ secrets.HOST_SSH_USERNAME }}@${{ secrets.HOST_SSH_NAME }} "docker login ghcr.io -u ${{ github.actor }} -p ${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Pull frontend image on server
+        run: |
+          SHORT_SHA=$(git rev-parse --short=7 HEAD)
+          IMAGE_REPO="${{ env.REGISTRY }}/$(echo "${{ env.IMAGE }}" | tr '[:upper:]' '[:lower:]'):${SHORT_SHA}"
+          ssh -o StrictHostKeyChecking=no -p ${{ secrets.HOST_SSH_PORT }} ${{ secrets.HOST_SSH_USERNAME }}@${{ secrets.HOST_SSH_NAME }} "docker pull ${IMAGE_REPO}"
+
+      - name: Pull backend image on server
+        run: |
+          SHORT_SHA=$(git rev-parse --short=7 HEAD)
+          IMAGE_REPO="${{ env.REGISTRY }}/$(echo "${{ env.IMAGE }}-api" | tr '[:upper:]' '[:lower:]'):${SHORT_SHA}"
+          ssh -o StrictHostKeyChecking=no -p ${{ secrets.HOST_SSH_PORT }} ${{ secrets.HOST_SSH_USERNAME }}@${{ secrets.HOST_SSH_NAME }} "docker pull ${IMAGE_REPO}"
+
+      - name: Deploy to Docker swarm
+        run: |
+          FILE_PATH="/tmp/${{ github.event.repository.name }}.${{ env.ENVIRONMENT }}.deployment.yml"
+          ssh -o StrictHostKeyChecking=no -p ${{ secrets.HOST_SSH_PORT }} ${{ secrets.HOST_SSH_USERNAME }}@${{ secrets.HOST_SSH_NAME }} "docker stack deploy -c "$FILE_PATH" ${{ github.event.repository.name }}-${{ env.ENVIRONMENT }}"
+
+      - name: Clean up deployment file on server
+        if: always()
+        run: ssh -o StrictHostKeyChecking=no -p ${{ secrets.HOST_SSH_PORT }} ${{ secrets.HOST_SSH_USERNAME }}@${{ secrets.HOST_SSH_NAME }} "rm -f /tmp/*.yml"
+
+      - name: Delete deployment file locally
+        if: always()
+        run: rm -f /tmp/${{ github.event.repository.name }}.${{ env.ENVIRONMENT }}.deployment.yml

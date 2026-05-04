@@ -1,0 +1,13 @@
+{
+  "$schema": "https://inlang.com/schema/inlang-message-format",
+  "hello_world": "Hello, {name} from es!",
+  "sidebar_platform": "Plataforma",
+  "sidebar_": "Platform",
+  "menu_dashboard": "Panel",
+  "menu_access": "Accesos",
+  "menu_access_user": "Usuarios",
+  "menu_access_roles": "Roles",
+  "menu_management": "Administrar",
+  "menu_management_categories": "Categorias",
+  "menu_management_products": "Productos"
+}

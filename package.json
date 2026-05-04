@@ -1,0 +1,27 @@
+{
+  "name": "svelte-and-golang-template",
+  "version": "1.0.0",
+  "description": "this a template base for reference and test with mix svelte and golang",
+  "keywords": [
+    "svelte",
+    "golang",
+    "full-stack"
+  ],
+  "homepage": "https://github.com/RomanshkVolkov/svelte-ssr-example#readme",
+  "bugs": {
+    "url": "https://github.com/RomanshkVolkov/svelte-ssr-example/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RomanshkVolkov/svelte-ssr-example.git"
+  },
+  "license": "ISC",
+  "author": "Romanshk Volkov",
+  "type": "commonjs",
+  "main": "index.js",
+  "scripts": {
+    "dev:frontend": "cd frontend && $npm_execpath run dev",
+    "dev:backend": "cd backend && air",
+    "dev": "$npm_execpath run dev:frontend & $npm_execpath run dev:backend"
+  }
+}
